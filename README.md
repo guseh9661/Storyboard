@@ -26,11 +26,13 @@ Vercel의 배포 파일시스템은 영구 저장소가 아니기 때문에, 배
 - `GITHUB_TOKEN`: `contents:write` 권한이 있는 GitHub fine-grained token
 - `GITHUB_OWNER`: GitHub 사용자 또는 조직명
 - `GITHUB_REPO`: 저장소 이름
+- `GEMINI_API_KEY`: AI 수정에 사용할 Gemini API 키
 
 선택:
 
 - `GITHUB_BRANCH`: 기본값 `main`
 - `STORYBOARD_WRITE_TOKEN`: 웹 저장 보호용 비밀번호. 설정하면 저장 시 한 번 입력합니다.
+- `GEMINI_MODEL`: 기본값 `gemini-2.5-flash`
 
 ## DB 다시 추출
 

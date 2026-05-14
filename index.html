@@ -326,6 +326,67 @@ body {
 .s2c { color: #8a5030; }
 .s3c { color: #305070; }
 .totc { color: #222; }
+
+.ai-panel {
+  background: #fff;
+  border-bottom: 1px solid #e0ddd6;
+  padding: 14px 48px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+.ai-input {
+  min-height: 44px;
+  max-height: 120px;
+  resize: vertical;
+  border: 1px solid #d8d2c8;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  line-height: 1.5;
+  color: #222;
+  background: #fffdfa;
+}
+.ai-input:focus {
+  outline: 2px solid rgba(138, 106, 64, 0.18);
+  border-color: #9b7a4f;
+}
+.ai-actions {
+  display: flex;
+  gap: 6px;
+}
+.ai-button {
+  min-height: 44px;
+  border: 1px solid #7b613d;
+  background: #6f5635;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0 14px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ai-button:hover { background: #5f492e; }
+.ai-button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.ai-status {
+  grid-column: 1 / -1;
+  min-height: 18px;
+  font-size: 11px;
+  color: #8a6a40;
+}
+
+@media (max-width: 768px) {
+  .ai-panel {
+    padding: 12px 20px;
+    grid-template-columns: 1fr;
+  }
+  .ai-actions { justify-content: flex-end; }
+}
 </style>
 </head>
 <body>
@@ -342,6 +403,14 @@ body {
     <span class="pill">총 47컷</span>
     <span class="pill">10분 이내</span>
   </div>
+</div>
+
+<div class="ai-panel">
+  <textarea class="ai-input" id="aiInstruction" placeholder="예: C09 대사를 더 불안하게 바꾸고, C12 연출 의도에 휘파람 금기 복선을 추가해줘."></textarea>
+  <div class="ai-actions">
+    <button class="ai-button" id="aiEditButton" type="button">AI 수정</button>
+  </div>
+  <div class="ai-status" id="aiStatus" aria-live="polite"></div>
 </div>
 
 <div class="nav">
@@ -1546,6 +1615,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   setupDetailEditors();
+  setupAiEditor();
 });
 
 async function loadStoryboardData() {
@@ -1615,6 +1685,69 @@ function applyStoryboardToDom() {
       }
     });
   });
+}
+
+function setupAiEditor() {
+  const input = document.getElementById('aiInstruction');
+  const button = document.getElementById('aiEditButton');
+  const status = document.getElementById('aiStatus');
+  if (!input || !button || !status) return;
+
+  button.addEventListener('click', async () => {
+    const instruction = input.value.trim();
+    if (!instruction) {
+      status.textContent = '수정 요청을 입력해주세요.';
+      input.focus();
+      return;
+    }
+
+    button.disabled = true;
+    button.textContent = '수정중';
+    status.textContent = 'AI가 DB를 읽고 수정안을 적용하는 중입니다.';
+
+    try {
+      const result = await requestAiEdit(instruction);
+      storyboardData = result.data;
+      applyStoryboardToDom();
+      status.textContent = `${result.summary || 'AI 수정 완료'} · 변경 컷: ${(result.changedIds || []).join(', ')}`;
+      input.value = '';
+    } catch (error) {
+      status.textContent = (error && error.message) || 'AI 수정에 실패했습니다.';
+    } finally {
+      button.disabled = false;
+      button.textContent = 'AI 수정';
+    }
+  });
+}
+
+async function requestAiEdit(instruction) {
+  const token = localStorage.getItem('storyboardWriteToken') || '';
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['x-storyboard-token'] = token;
+
+  let response = await fetch('/api/ai-edit', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ instruction }),
+  });
+
+  if (response.status === 401) {
+    const nextToken = prompt('저장 권한 토큰을 입력해주세요.');
+    if (!nextToken) throw new Error('AI 수정이 취소되었습니다.');
+    localStorage.setItem('storyboardWriteToken', nextToken);
+    response = await fetch('/api/ai-edit', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-storyboard-token': nextToken,
+      },
+      body: JSON.stringify({ instruction }),
+    });
+  }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || 'AI 수정에 실패했습니다.');
+  return result;
 }
 
 function go(id) {
